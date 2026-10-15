@@ -107,7 +107,12 @@ export function proposeRepairs(error) {
   if (e.category === "dependency-resolution" && evidence?.semverAnalysis?.prereleaseExcluded) {
     const packageName = evidence.peerDependency?.name;
     const safePackageName = typeof packageName === "string" && /^(?:@[a-z0-9._~-]+\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(packageName) ? packageName : null;
+    const declaringName = evidence.peerDependency?.declaredBy?.name;
+    const safeDeclaringName = typeof declaringName === "string" && /^(?:@[a-z0-9._~-]+\\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(declaringName) ? declaringName : null;
     const inspectCommand = safePackageName ? "npm view " + safePackageName + " versions --json" : "npm ls";
+    const verifyCommand = safePackageName && safeDeclaringName
+      ? "npm ls " + safePackageName + " " + safeDeclaringName
+      : "npm ls";
     return [
       {
         id: "inspect-compatible-stable-versions",
@@ -116,7 +121,7 @@ export function proposeRepairs(error) {
         command: inspectCommand,
         destructive: false,
         requiresApproval: true,
-        verification: "npm ls nitro @lovable.dev/vite-tanstack-config",
+        verification: verifyCommand,
         kind: "read-only-investigation"
       },
       {
@@ -126,7 +131,7 @@ export function proposeRepairs(error) {
         command: "npm install --legacy-peer-deps",
         destructive: false,
         requiresApproval: true,
-        verification: "npm ls nitro @lovable.dev/vite-tanstack-config",
+        verification: verifyCommand,
         kind: "workaround"
       }
     ];
@@ -169,15 +174,24 @@ export class NodeHealer {
     return { error: { id: error.id, code: error.code, category: error.category, summary: error.summary, fingerprint: error.fingerprint, dependencyEvidence: error.dependencyEvidence }, candidates: [...local, ...researched] };
   }
 
-  async heal(input, { autoApply = false } = {}) {
+  async heal(input, { autoApply = false, candidateId } = {}) {
     const diagnosis = await this.diagnose(input);
     if (!diagnosis.candidates.length) {
       const choice = await this.onTerminal({ status: "needs-human", summary: diagnosis.error.summary, errorId: diagnosis.error.id });
       return { status: choice === "show-error" ? "human-interaction" : "unresolved", diagnosis, rawError: choice === "show-error" ? String(input) : undefined };
     }
-    const candidate = diagnosis.candidates[0];
+    const candidate = candidateId
+      ? diagnosis.candidates.find((item) => item.id === candidateId)
+      : diagnosis.candidates[0];
+    if (!candidate) {
+      return {
+        status: "invalid-candidate",
+        diagnosis,
+        requestedCandidateId: candidateId
+      };
+    }
     if (!autoApply || candidate.requiresApproval || candidate.destructive) {
-      const choice = await this.onTerminal({ status: "repair-proposed", summary: diagnosis.error.summary, command: candidate.command, rationale: candidate.rationale, errorId: diagnosis.error.id });
+      const choice = await this.onTerminal({ status: "repair-proposed", summary: diagnosis.error.summary, candidateId: candidate.id, command: candidate.command, rationale: candidate.rationale, errorId: diagnosis.error.id });
       if (choice !== "approve") return { status: choice === "show-error" ? "human-interaction" : "awaiting-approval", diagnosis, rawError: choice === "show-error" ? String(input) : undefined };
     }
     const applied = await this.apply(candidate.command, { candidate, diagnosis });
