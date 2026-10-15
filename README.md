@@ -41,10 +41,10 @@ npm run demo
 The demo does not execute the suggested command. For the supplied `@lovable.dev/vite-tanstack-config@2.1.1` / `nitro` error, the current heuristic proposes:
 
 ```sh
-npm install --save-dev nitro@3.0.260603-beta @lovable.dev/vite-tanstack-config@2.1.1
+npm install --legacy-peer-deps
 ```
 
-This proposal refreshes the explicit package constraints and lockfile without opting out of peer-dependency checks. It must still be validated against the target project's `package.json`, lockfile, npm version, and registry metadata. The engine intentionally does not recommend `--force` or `--legacy-peer-deps` as default fixes.
+This is a workaround, not a durable version fix: it bypasses strict peer-dependency resolution and may permit an incompatible tree. The durable fix is to select a compatible stable Nitro/config package pair or correct the upstream `peerDependencies` range. Validate against the target project's `package.json`, lockfile, npm version, and registry metadata before proceeding.
 
 ## Development
 
