@@ -64,7 +64,7 @@ export function analyzeSemverRange(range, version) {
 function extractDependencyEvidence(text) {
   const resolving = text.match(/While resolving:\s*([^\s]+)@([^\s]+)/i);
   const found = text.match(/Found:\s*([^\s@]+(?:\/[^\s@]+)?)@([^\s]+)/i);
-  const peer = text.match(/peer(Optional)?\s+(@[^/\s]+\/[^@\s]+|[^@\s]+)\s+["']?([^"'\s]+)["']?\s+from\s+(@[^/\s]+\/[^@\s]+|[^@\s]+)@([^\s]+)/i);
+  const peer = text.match(/peer(Optional)?\s+(@[^/\s]+\/[^@\s]+|[^@\s]+)@?\s*["']?([^"'\s]+)["']?\s+from\s+(@[^/\s]+\/[^@\s]+|[^@\s]+)@([^\s]+)/i);
   const conflicting = text.match(/Conflicting peer dependency:\s*([^\s@]+(?:\/[^\s@]+)?)@([^\s]+)/i);
   const dependencyName = peer?.[2] ?? conflicting?.[1] ?? found?.[1] ?? null;
   const requiredRange = peer?.[3] ?? null;
