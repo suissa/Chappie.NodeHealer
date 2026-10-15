@@ -64,7 +64,7 @@ export function analyzeSemverRange(range, version) {
 function extractDependencyEvidence(text) {
   const resolving = text.match(/While resolving:\s*([^\s]+)@([^\s]+)/i);
   const found = text.match(/Found:\s*([^\s@]+(?:\/[^\s@]+)?)@([^\s]+)/i);
-  const peer = text.match(/peer(Optional)?\s+([^\s@]+(?:\/[^\s@]+)?)\s+["']?([^"'\s]+)["']?\s+from\s+([^\s@]+(?:\/[^\s@]+)?)@([^\s]+)/i);
+  const peer = text.match(/peer(Optional)?\s+(@[^/\s]+\/[^@\s]+|[^@\s]+)\s+["']?([^"'\s]+)["']?\s+from\s+(@[^/\s]+\/[^@\s]+|[^@\s]+)@([^\s]+)/i);
   const conflicting = text.match(/Conflicting peer dependency:\s*([^\s@]+(?:\/[^\s@]+)?)@([^\s]+)/i);
   const dependencyName = peer?.[2] ?? conflicting?.[1] ?? found?.[1] ?? null;
   const requiredRange = peer?.[3] ?? null;
@@ -125,12 +125,15 @@ export function proposeRepairs(error) {
   const e = typeof error === "string" ? normalizeError(error) : error;
   const evidence = e.dependencyEvidence;
   if (e.category === "dependency-resolution" && evidence?.semverAnalysis?.prereleaseExcluded) {
+    const packageName = evidence.peerDependency?.name;
+    const safePackageName = typeof packageName === "string" && /^(?:@[a-z0-9._~-]+\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(packageName) ? packageName : null;
+    const inspectCommand = safePackageName ? \`npm view \${safePackageName} versions --json\` : "npm ls";
     return [
       {
         id: "inspect-compatible-stable-versions",
         confidence: "high",
         rationale: `A dependência ${evidence.peerDependency?.name ?? evidence.semverAnalysis.dependency} declara a faixa ${evidence.semverAnalysis.requiredRange}, mas a versão observada ${evidence.semverAnalysis.observedVersion} é prerelease de outra versão-base. ${evidence.semverAnalysis.reason} Verifique versões estáveis disponíveis e a declaração upstream antes de alterar o lockfile.`,
-        command: "npm view nitro versions --json",
+        command: inspectCommand,
         destructive: false,
         requiresApproval: true,
         verification: "npm ls nitro @lovable.dev/vite-tanstack-config",
