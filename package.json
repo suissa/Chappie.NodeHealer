@@ -1,0 +1,14 @@
+{
+  "name": "chappie-nodehealer",
+  "version": "0.1.0",
+  "description": "Generic error diagnosis, evidence-based repair proposals, and privacy-preserving terminal interaction.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "demo": "node examples/npm-eresolve.mjs"
+  },
+  "license": "MIT"
+}
