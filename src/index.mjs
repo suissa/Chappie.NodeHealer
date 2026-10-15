@@ -6,58 +6,37 @@ const redact = (text) => String(text)
   .replace(/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,})\b/g, "<redacted-secret>")
   .replace(/(token|password|secret|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi, "$1=<redacted>");
 
-function parseVersion(version) {
-  const match = String(version ?? "").trim().replace(/^v/, "").match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
-  if (!match) return null;
-  return { major: +match[1], minor: +match[2], patch: +match[3], prerelease: match[4] ? match[4].split(".") : [] };
-}
-
-function compareVersions(a, b) {
-  for (const key of ["major", "minor", "patch"]) {
-    if (a[key] !== b[key]) return a[key] < b[key] ? -1 : 1;
-  }
-  if (!a.prerelease.length && !b.prerelease.length) return 0;
-  if (!a.prerelease.length) return 1;
-  if (!b.prerelease.length) return -1;
-  const length = Math.max(a.prerelease.length, b.prerelease.length);
-  for (let i = 0; i < length; i++) {
-    const x = a.prerelease[i], y = b.prerelease[i];
-    if (x === undefined) return -1;
-    if (y === undefined) return 1;
-    if (x === y) continue;
-    const xn = /^\d+$/.test(x), yn = /^\d+$/.test(y);
-    if (xn && yn) return +x < +y ? -1 : 1;
-    if (xn !== yn) return xn ? -1 : 1;
-    return x < y ? -1 : 1;
-  }
-  return 0;
-}
-
 /**
- * Intentionally handles only simple comparator ranges (currently >=, >, =, and exact
- * versions). Complex ranges are reported as unknown rather than guessed.
+ * Uses the same SemVer implementation as npm's ecosystem rather than maintaining
+ * a partial home-grown parser. Validates complete npm ranges, including unions,
+ * wildcards, tilde, caret, hyphen and comparator sets.
  */
 export function analyzeSemverRange(range, version) {
-  const candidate = parseVersion(version);
-  const match = String(range ?? "").trim().match(/^(>=|>|=)?\s*(v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/);
-  if (!candidate || !match) return { supported: false, compatible: null, prereleaseExcluded: false, reason: "Faixa SemVer complexa ou versão inválida; requer o resolvedor SemVer real." };
-  const operator = match[1] || "=";
-  const comparatorText = match[2].replace(/^v/, "");
-  const comparator = parseVersion(comparatorText);
-  const order = compareVersions(candidate, comparator);
-  const comparatorAllowsPrerelease = candidate.major === comparator.major &&
-    candidate.minor === comparator.minor &&
-    candidate.patch === comparator.patch && comparator.prerelease.length > 0;
-  const prereleaseExcluded = candidate.prerelease.length > 0 && !comparatorAllowsPrerelease;
-  let compatible = operator === ">=" ? order >= 0 : operator === ">" ? order > 0 : order === 0;
-  if (prereleaseExcluded) compatible = false;
+  const candidate = semver.valid(String(version ?? "").trim());
+  const normalizedRange = String(range ?? "").trim();
+  if (!candidate || !semver.validRange(normalizedRange)) {
+    return {
+      supported: false,
+      compatible: null,
+      prereleaseExcluded: false,
+      reason: "Versão ou faixa SemVer inválida; a heurística não deve inferir uma correção."
+    };
+  }
+
+  const compatible = semver.satisfies(candidate, normalizedRange);
+  const includePrereleaseCompatible = semver.satisfies(candidate, normalizedRange, { includePrerelease: true });
+  const prereleaseExcluded = semver.prerelease(candidate) !== null &&
+    !compatible && includePrereleaseCompatible;
+
   return {
     supported: true,
     compatible,
     prereleaseExcluded,
     reason: prereleaseExcluded
-      ? "SemVer exclui prereleases de outra versão-base quando nenhum comparador da faixa menciona um prerelease dessa mesma versão-base."
-      : compatible ? "A versão satisfaz o comparador simples analisado." : "A versão não satisfaz o comparador simples analisado."
+      ? "A versão só satisfaz a faixa quando a regra de inclusão de prereleases é desativada; a faixa não inclui prereleases desta versão-base."
+      : compatible
+        ? "A versão satisfaz a faixa usando a semântica SemVer padrão."
+        : "A versão não satisfaz a faixa usando a semântica SemVer padrão."
   };
 }
 
