@@ -195,8 +195,17 @@ export class NodeHealer {
       if (choice !== "approve") return { status: choice === "show-error" ? "human-interaction" : "awaiting-approval", diagnosis, rawError: choice === "show-error" ? String(input) : undefined };
     }
     const applied = await this.apply(candidate.command, { candidate, diagnosis });
+    if (candidate.kind === "read-only-investigation") {
+      return {
+        status: "investigation-completed",
+        diagnosis,
+        candidateId: candidate.id,
+        command: candidate.command,
+        result: applied
+      };
+    }
     const verified = await this.verify(candidate.verification, { candidate, diagnosis, applied });
-    return { status: verified ? "healed" : "verification-failed", diagnosis, command: candidate.command, verification: candidate.verification };
+    return { status: verified ? "healed" : "verification-failed", diagnosis, candidateId: candidate.id, command: candidate.command, verification: candidate.verification };
   }
 }
 
