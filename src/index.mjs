@@ -127,7 +127,7 @@ export function proposeRepairs(error) {
   if (e.category === "dependency-resolution" && evidence?.semverAnalysis?.prereleaseExcluded) {
     const packageName = evidence.peerDependency?.name;
     const safePackageName = typeof packageName === "string" && /^(?:@[a-z0-9._~-]+\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(packageName) ? packageName : null;
-    const inspectCommand = safePackageName ? \`npm view \${safePackageName} versions --json\` : "npm ls";
+    const inspectCommand = safePackageName ? "npm view " + safePackageName + " versions --json" : "npm ls";
     return [
       {
         id: "inspect-compatible-stable-versions",
