@@ -139,3 +139,18 @@ test("invalid candidate IDs never execute commands", async () => {
   assert.equal(result.status, "invalid-candidate");
   assert.equal(applied, false);
 });
+
+test("read-only investigation does not run repair verification", async () => {
+  let verifyCalled = false;
+  const healer = new NodeHealer({
+    onTerminal: async () => "approve",
+    apply: async () => ({ stdout: "[\"3.0.260603\"]", exitCode: 0 }),
+    verify: async () => { verifyCalled = true; return true; }
+  });
+  const result = await healer.heal(fixture, {
+    candidateId: "inspect-compatible-stable-versions"
+  });
+  assert.equal(result.status, "investigation-completed");
+  assert.equal(result.command, "npm view nitro versions --json");
+  assert.equal(verifyCalled, false);
+});
