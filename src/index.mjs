@@ -87,7 +87,7 @@ export class NodeHealer {
     const error = normalizeError(input);
     const local = proposeRepairs(error);
     const researched = await this.search({ code: error.code, category: error.category, summary: error.summary, packages: error.packages });
-    return { error: { id: error.id, code: error.code, category: error.category, summary: error.summary, fingerprint: error.fingerprint }, candidates: [...local, ...researched], evidence: error.sanitizedEvidence };
+    return { error: { id: error.id, code: error.code, category: error.category, summary: error.summary, fingerprint: error.fingerprint }, candidates: [...local, ...researched] };
   }
 
   async heal(input, { autoApply = false } = {}) {
