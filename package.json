@@ -10,5 +10,8 @@
     "test": "node --test",
     "demo": "node examples/npm-eresolve.mjs"
   },
+  "dependencies": {
+    "semver": "^7.7.2"
+  },
   "license": "MIT"
 }

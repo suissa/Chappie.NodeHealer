@@ -27,25 +27,29 @@ const healer = new NodeHealer({
 });
 
 const result = await healer.heal(errorText);
+
+// To choose the explicitly labelled workaround instead of the first candidate:
+// await healer.heal(errorText, { candidateId: "npm-legacy-peer-deps-workaround" });
 ```
 
 ## Semantic ERESOLVE analysis
 
 For npm peer dependency errors, NodeHealer extracts the resolving package, found package/version, peer range, whether the peer is optional, the declaring package, and any conflicting peer version.
 
-It also checks the SemVer prerelease gate for simple comparators such as `>=3.0.260429-beta`. A prerelease like `3.0.260603-beta` has a different `major.minor.patch` tuple from the prerelease comparator, so it is excluded by SemVer's prerelease rule even though its date-like version components appear later. A stable version such as `3.0.260603` is not excluded by that prerelease gate. This is a heuristic diagnostic, not a substitute for validating the complete range with npm's SemVer implementation.
+It delegates SemVer parsing and range evaluation to the `semver` library instead of maintaining a partial parser. Full npm-style ranges (including caret, tilde, comparator sets and unions) are validated. For `>=3.0.260429-beta`, a candidate `3.0.260603-beta` is excluded by the prerelease gate because its `major.minor.patch` tuple differs from the comparator's prerelease tuple, even though the date-like components appear later. A stable release such as `3.0.260603` is not excluded by that gate. Invalid ranges and versions are marked unsupported instead of guessed.
 
 When this cause is detected, candidates are ordered by risk:
 1. Read-only investigation: `npm view nitro versions --json`.
 2. Temporary workaround: `npm install --legacy-peer-deps`.
 
-The second command bypasses strict peer dependency resolution and may install an incompatible dependency tree. It is not a durable fix. The durable resolution is to select a verified compatible stable version or correct the upstream `peerDependencies` range if the package supports the intended prereleases. Review the project's manifest and lockfile before changing versions. Neither command is executed by the built-in heuristic.
+The second command bypasses strict peer dependency resolution and may install an incompatible dependency tree. It is not a durable fix. The durable resolution is to select a verified compatible stable version or correct the upstream `peerDependencies` range if the package supports the intended prereleases. Review the project's manifest and lockfile before changing versions. Neither command is executed by the built-in heuristic. Callers can select a candidate with `heal(error, { candidateId })`; invalid candidate IDs are rejected without executing anything.
 
 ## Development and CI
 
 Requires Node.js 20 or newer.
 
 ```sh
+npm install
 npm test
 npm run demo
 ```

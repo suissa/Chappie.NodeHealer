@@ -38,6 +38,7 @@ test("SemVer prerelease rule excludes a prerelease from a different base version
   assert.equal(result.supported, true);
   assert.equal(result.compatible, false);
   assert.equal(result.prereleaseExcluded, true);
+  assert.match(result.reason, /prereleases/i);
 });
 
 test("SemVer comparator admits a prerelease from the same base version", () => {
@@ -52,10 +53,12 @@ test("stable release is not excluded by prerelease gating", () => {
   assert.equal(result.prereleaseExcluded, false);
 });
 
-test("complex SemVer ranges are not guessed", () => {
-  const result = analyzeSemverRange("^3.0.0 || >=4.0.0", "3.0.603-beta");
-  assert.equal(result.supported, false);
-  assert.equal(result.compatible, null);
+test("complete npm SemVer ranges are evaluated without guessing", () => {
+  assert.equal(analyzeSemverRange("^3.0.0 || >=4.0.0", "3.2.0").compatible, true);
+  assert.equal(analyzeSemverRange("^3.0.0 || >=4.0.0", "4.1.0").compatible, true);
+  assert.equal(analyzeSemverRange("^3.0.0 || >=4.0.0", "5.0.0-beta.1").compatible, false);
+  assert.equal(analyzeSemverRange("not-a-range", "3.0.0").supported, false);
+  assert.equal(analyzeSemverRange("^3.0.0", "not-a-version").supported, false);
 });
 
 test("proposes investigation before the risky workaround", () => {
@@ -101,4 +104,53 @@ test("never silently applies a candidate that requires approval", async () => {
   const result = await healer.heal(fixture, { autoApply: true });
   assert.equal(result.status, "awaiting-approval");
   assert.equal(applied, false);
+});
+
+test("developer can explicitly select the workaround candidate", async () => {
+  let appliedCommand;
+  let terminalEvent;
+  const healer = new NodeHealer({
+    onTerminal: async (event) => {
+      terminalEvent = event;
+      return "approve";
+    },
+    apply: async (command) => {
+      appliedCommand = command;
+      return { exitCode: 0 };
+    },
+    verify: async () => true
+  });
+  const result = await healer.heal(fixture, {
+    candidateId: "npm-legacy-peer-deps-workaround"
+  });
+  assert.equal(terminalEvent.candidateId, "npm-legacy-peer-deps-workaround");
+  assert.equal(appliedCommand, "npm install --legacy-peer-deps");
+  assert.equal(result.status, "healed");
+});
+
+test("invalid candidate IDs never execute commands", async () => {
+  let applied = false;
+  const healer = new NodeHealer({
+    onTerminal: async () => "approve",
+    apply: async () => { applied = true; },
+    verify: async () => true
+  });
+  const result = await healer.heal(fixture, { candidateId: "not-a-real-candidate" });
+  assert.equal(result.status, "invalid-candidate");
+  assert.equal(applied, false);
+});
+
+test("read-only investigation does not run repair verification", async () => {
+  let verifyCalled = false;
+  const healer = new NodeHealer({
+    onTerminal: async () => "approve",
+    apply: async () => ({ stdout: "[\"3.0.260603\"]", exitCode: 0 }),
+    verify: async () => { verifyCalled = true; return true; }
+  });
+  const result = await healer.heal(fixture, {
+    candidateId: "inspect-compatible-stable-versions"
+  });
+  assert.equal(result.status, "investigation-completed");
+  assert.equal(result.command, "npm view nitro versions --json");
+  assert.equal(verifyCalled, false);
 });
