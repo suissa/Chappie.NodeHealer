@@ -105,3 +105,37 @@ test("never silently applies a candidate that requires approval", async () => {
   assert.equal(result.status, "awaiting-approval");
   assert.equal(applied, false);
 });
+
+test("developer can explicitly select the workaround candidate", async () => {
+  let appliedCommand;
+  let terminalEvent;
+  const healer = new NodeHealer({
+    onTerminal: async (event) => {
+      terminalEvent = event;
+      return "approve";
+    },
+    apply: async (command) => {
+      appliedCommand = command;
+      return { exitCode: 0 };
+    },
+    verify: async () => true
+  });
+  const result = await healer.heal(fixture, {
+    candidateId: "npm-legacy-peer-deps-workaround"
+  });
+  assert.equal(terminalEvent.candidateId, "npm-legacy-peer-deps-workaround");
+  assert.equal(appliedCommand, "npm install --legacy-peer-deps");
+  assert.equal(result.status, "healed");
+});
+
+test("invalid candidate IDs never execute commands", async () => {
+  let applied = false;
+  const healer = new NodeHealer({
+    onTerminal: async () => "approve",
+    apply: async () => { applied = true; },
+    verify: async () => true
+  });
+  const result = await healer.heal(fixture, { candidateId: "not-a-real-candidate" });
+  assert.equal(result.status, "invalid-candidate");
+  assert.equal(applied, false);
+});
