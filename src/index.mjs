@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import semver from "semver";
 
 const redact = (text) => String(text)
   .replace(/(?:\/home\/[^\s/:]+|\/Users\/[^\s/:]+)\/(?:[^\s]+)?/g, "<redacted-path>")
