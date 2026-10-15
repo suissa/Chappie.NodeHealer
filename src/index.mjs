@@ -47,8 +47,8 @@ export function proposeRepairs(error) {
     return [{
       id: "npm-refresh-peer-resolution",
       confidence: "medium",
-      rationale: "O log indica conflito na resolução de peer dependencies envolvendo a configuração do Vite/TanStack e nitro. Reconciliar as versões declaradas e o lockfile é preferível a ignorar o contrato de peer dependencies.",
-      command: "npm install --save-dev nitro@3.0.260603-beta @lovable.dev/vite-tanstack-config@2.1.1",
+      rationale: "O npm pode excluir prereleases de versões diferentes da versão-base do comparador, mesmo quando parecem maiores. O caminho durável é usar uma versão estável compatível ou corrigir a faixa peerDependencies do pacote upstream. Este comando é apenas um workaround para confirmar a instalação; ele ignora a validação estrita de peers e exige aprovação explícita.",
+      command: "npm install --legacy-peer-deps",
       destructive: false,
       requiresApproval: true,
       verification: "npm ls nitro @lovable.dev/vite-tanstack-config"
