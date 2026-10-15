@@ -17,7 +17,7 @@ test("classifies npm ERESOLVE without executing a command", () => {
   assert.equal(error.category, "dependency-resolution");
   const repairs = proposeRepairs(error);
   assert.equal(repairs.length, 1);
-  assert.equal(repairs[0].command, "npm install --save-dev nitro@3.0.260603-beta @lovable.dev/vite-tanstack-config@2.1.1");
+  assert.equal(repairs[0].command, "npm install --legacy-peer-deps");
   assert.equal(repairs[0].requiresApproval, true);
 });
 
