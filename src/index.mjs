@@ -108,7 +108,7 @@ export function proposeRepairs(error) {
     const packageName = evidence.peerDependency?.name;
     const safePackageName = typeof packageName === "string" && /^(?:@[a-z0-9._~-]+\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(packageName) ? packageName : null;
     const declaringName = evidence.peerDependency?.declaredBy?.name;
-    const safeDeclaringName = typeof declaringName === "string" && /^(?:@[a-z0-9._~-]+\\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(declaringName) ? declaringName : null;
+    const safeDeclaringName = typeof declaringName === "string" && /^(?:@[a-z0-9._~-]+[/][a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(declaringName) ? declaringName : null;
     const inspectCommand = safePackageName ? "npm view " + safePackageName + " versions --json" : "npm ls";
     const verifyCommand = safePackageName && safeDeclaringName
       ? "npm ls " + safePackageName + " " + safeDeclaringName
