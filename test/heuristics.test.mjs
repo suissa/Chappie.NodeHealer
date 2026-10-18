@@ -24,7 +24,7 @@ const strongCandidate = {
 test("historical success is smoothed toward 0.5 when evidence is sparse", () => {
   assert.equal(estimateHistoricalSuccess(0, 0), 0.5);
   assert.equal(estimateHistoricalSuccess(8, 10), 10 / 14);
-  assert.equal(estimateHistoricalSuccess(100, 2), 1);
+  assert.equal(estimateHistoricalSuccess(100, 2), 2 / 3);
 });
 
 test("score is bounded, explainable, and carries policy version", () => {
