@@ -235,7 +235,7 @@ export class NodeHealer {
         rule_version: "nodehealer-core-v1", created_at: now
       });
       const [similarCases, reachableNodes] = await Promise.all([
-        this.knowledgeStore.findSimilarCases({ signatureId, errorCode: error.code, tool: "npm", limit: 20 }),
+        this.knowledgeStore.findSimilarCases({ signatureId, errorCode: error.code, tool: "npm", excludeCaseId: error.id, limit: 20 }),
         this.knowledgeStore.inferReachableNodes(error.id, { maxDepth: 4, limit: 100 })
       ]);
       return { status: "available", signatureId, hypothesisId, similarCases, reachableNodes };
