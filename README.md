@@ -46,23 +46,20 @@ The second command bypasses strict peer dependency resolution and may install an
 
 ## CozoDB knowledge store
 
-The optional CozoDB adapter persists redacted failure cases, extracted evidence, signatures, root-cause hypotheses, causal edges, solution candidates, verification outcomes, and execution audit metadata. It retrieves similar failures and computes bounded graph reachability inside CozoDB. Knowledge retrieval is context for diagnosis; it never grants permission to execute a candidate.
+The CozoDB adapter persists redacted failure cases, extracted evidence, signatures, root-cause hypotheses, causal edges, solution candidates, verification outcomes, and execution audit metadata. It retrieves similar failures and computes bounded graph reachability inside CozoDB. Knowledge retrieval is context for diagnosis; it never grants permission to execute a candidate.
 
-Install the native binding when you want embedded persistence:
+The default transport uses CozoDB's standalone HTTP API at `POST /text-query`, so NodeHealer does not need a native module to be installed. Run a CozoDB server with a persistent storage engine for production; its HTTP endpoint should remain on a trusted local/private network or behind a secured proxy.
 
-```sh
-npm install
-```
-
-Example using a persistent RocksDB-backed Cozo instance:
+Example using a running CozoDB server:
 
 ```js
 import { NodeHealer } from "./src/index.mjs";
 import { openCozoKnowledgeStore } from "./src/knowledge/cozo-store.mjs";
 
 const knowledgeStore = await openCozoKnowledgeStore({
-  engine: "rocksdb",
-  path: "./.nodehealer/knowledge.db"
+  transport: "http",
+  endpoint: process.env.COZO_URL ?? "http://127.0.0.1:9070/text-query",
+  authToken: process.env.COZO_AUTH_TOKEN
 });
 await knowledgeStore.initialize();
 
@@ -83,9 +80,9 @@ try {
 }
 ```
 
-You can also inject an existing CozoDb-compatible object ({ `run(query, params)` }) for tests or a managed database. The adapter uses bound parameters for values, a static relation allowlist, bounded result sizes, and a versioned migration ledger. Raw logs and secrets should not be stored; only the redacted excerpt and a fingerprint are persisted. If the database is unavailable, NodeHealer reports `knowledge.status = "unavailable"` and continues conservative local diagnosis without relaxing approval rules.
+You can also inject an existing Cozo-compatible object ({ `run(query, params)` }) for tests or a managed database, or set `transport: "embedded"` and provide a locally built `cozo-node` binding. The HTTP client uses the documented `x-cozo-auth` header when `authToken` is supplied. The adapter uses bound parameters for values, a static relation allowlist, bounded result sizes, and a versioned migration ledger. Raw logs and secrets should not be stored; only the redacted excerpt and a fingerprint are persisted. If the database is unavailable, NodeHealer reports `knowledge.status = "unavailable"` and continues conservative local diagnosis without relaxing approval rules.
 
-The schema reference is `src/knowledge/schema.cozo`; the adapter currently applies schema version 1. The test suite includes deterministic fake-client tests and a native integration test that runs when `cozo-node` can load on the current platform; otherwise that integration test is explicitly skipped. A persistent RocksDB deployment should still be exercised in the target environment before production use.
+The schema reference is `src/knowledge/schema.cozo`; the adapter currently applies schema version 1. Tests cover the HTTP contract with a fake fetch implementation. Set `COZO_URL` to a trusted `/text-query` endpoint to enable the live server integration test in `test/cozo-http-client.test.mjs`. The live test is skipped when no endpoint is configured.
 
 ## Development and CI
 
