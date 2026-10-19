@@ -13,8 +13,5 @@
   "dependencies": {
     "semver": "^7.7.2"
   },
-  "license": "MIT",
-  "optionalDependencies": {
-    "cozo-node": "^0.7.6"
-  }
+  "license": "MIT"
 }
