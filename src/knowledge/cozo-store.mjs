@@ -269,13 +269,9 @@ export class CozoKnowledgeStore {
     for (let level = 1; level < depth; level++) {
       rules.push(`reachable_${level}[node] := reachable_${level - 1}[middle], *knowledge_edge{from_id: middle, to_id: node}`);
     }
-    const allReachable = Array.from({ length: depth }, (_, i) => `reachable_${i}[node]`).join("\n? [node] := ");
-    const edgeFilter = Array.isArray(edgeTypes) && edgeTypes.length
-      ? `, *knowledge_edge{from_id: _, edge_type, to_id: node}, edge_type in $edge_types`
-      : "";
-    const query = ` ${rules.join("\n")}\n?[node] := ${allReachable}${edgeFilter}\n:limit ${boundedLimit}`;
+    const allReachable = Array.from({ length: depth }, (_, i) => `?[node] := reachable_${i}[node]`).join("\n");
+    const query = `${rules.join("\n")}\n${allReachable}\n:limit ${boundedLimit}`;
     const params = { start: startNodeId };
-    if (Array.isArray(edgeTypes) && edgeTypes.length) params.edge_types = edgeTypes;
     return this.query(query, params);
   }
 
