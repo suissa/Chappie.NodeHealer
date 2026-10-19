@@ -72,11 +72,12 @@ test("relation names cannot be injected through the write API", async () => {
 test("similar case lookup uses parameterized filters and bounded limits", async () => {
   const db = fakeDb();
   const store = new CozoKnowledgeStore({ db });
-  const rows = await store.findSimilarCases({ errorCode: "ERESOLVE", tool: "npm", limit: 10000 });
+  const rows = await store.findSimilarCases({ errorCode: "ERESOLVE", tool: "npm", excludeCaseId: "current-case", limit: 10000 });
   assert.equal(rows[0].case_id, "case:1");
   const call = db.calls.at(-1);
   assert.ok(call.query.includes(":limit 100"));
   assert.equal(call.params.error_code, "ERESOLVE");
+  assert.equal(call.params.exclude_case_id, "current-case");
   assert.ok(!call.query.includes("ERESOLVE"));
 });
 
