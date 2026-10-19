@@ -130,3 +130,10 @@
     started_at: String,
     ended_at: String
 }
+
+:create nodehealer_migration {
+    version: Int
+ =>
+    name: String,
+    applied_at: String
+}
