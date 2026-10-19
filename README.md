@@ -85,7 +85,7 @@ try {
 
 You can also inject an existing CozoDb-compatible object ({ `run(query, params)` }) for tests or a managed database. The adapter uses bound parameters for values, a static relation allowlist, bounded result sizes, and a versioned migration ledger. Raw logs and secrets should not be stored; only the redacted excerpt and a fingerprint are persisted. If the database is unavailable, NodeHealer reports `knowledge.status = "unavailable"` and continues conservative local diagnosis without relaxing approval rules.
 
-The schema reference is `src/knowledge/schema.cozo`; the adapter currently applies schema version 1. Integration tests use a deterministic fake client. A real native CozoDB engine should also be exercised in the target deployment environment before relying on persistent storage in production.
+The schema reference is `src/knowledge/schema.cozo`; the adapter currently applies schema version 1. The test suite includes deterministic fake-client tests and a native integration test that runs when `cozo-node` can load on the current platform; otherwise that integration test is explicitly skipped. A persistent RocksDB deployment should still be exercised in the target environment before production use.
 
 ## Development and CI
 
