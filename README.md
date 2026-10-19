@@ -9,7 +9,7 @@ A generic Node.js error-diagnosis and repair-proposal engine. It normalizes fail
 - Commands are proposals, not shell execution. No command runs without a configured `apply` function and explicit approval.
 - Uncertain or potentially incompatible changes require approval. Verification is separate and must succeed before status becomes `healed`.
 - Research adapters receive minimized diagnostics. Treat logs and external search results as untrusted input.
-- SemVer inference intentionally supports only simple comparator ranges. Complex ranges are marked unknown and must be checked with the target project's actual SemVer implementation; the heuristic must not guess.
+- SemVer range evaluation delegates to the `semver` package and supports complete npm-style ranges. Invalid inputs remain unsupported rather than guessed.
 
 ## API
 
@@ -43,6 +43,49 @@ When this cause is detected, candidates are ordered by risk:
 2. Temporary workaround: `npm install --legacy-peer-deps`.
 
 The second command bypasses strict peer dependency resolution and may install an incompatible dependency tree. It is not a durable fix. The durable resolution is to select a verified compatible stable version or correct the upstream `peerDependencies` range if the package supports the intended prereleases. Review the project's manifest and lockfile before changing versions. Neither command is executed by the built-in heuristic. Callers can select a candidate with `heal(error, { candidateId })`; invalid candidate IDs are rejected without executing anything.
+
+## CozoDB knowledge store
+
+The optional CozoDB adapter persists redacted failure cases, extracted evidence, signatures, root-cause hypotheses, causal edges, solution candidates, verification outcomes, and execution audit metadata. It retrieves similar failures and computes bounded graph reachability inside CozoDB. Knowledge retrieval is context for diagnosis; it never grants permission to execute a candidate.
+
+Install the native binding when you want embedded persistence:
+
+```sh
+npm install
+```
+
+Example using a persistent RocksDB-backed Cozo instance:
+
+```js
+import { NodeHealer } from "./src/index.mjs";
+import { openCozoKnowledgeStore } from "./src/knowledge/cozo-store.mjs";
+
+const knowledgeStore = await openCozoKnowledgeStore({
+  engine: "rocksdb",
+  path: "./.nodehealer/knowledge.db"
+});
+await knowledgeStore.initialize();
+
+const healer = new NodeHealer({
+  knowledgeStore,
+  onTerminal: async (event) => {
+    // Render a concise summary and request explicit approval in your UI/terminal.
+    console.log(event.summary);
+    return "defer";
+  }
+});
+
+try {
+  const diagnosis = await healer.diagnose(errorText);
+  console.log(diagnosis.knowledge.status, diagnosis.knowledge.similarCases.length);
+} finally {
+  await knowledgeStore.close();
+}
+```
+
+You can also inject an existing CozoDb-compatible object ({ `run(query, params)` }) for tests or a managed database. The adapter uses bound parameters for values, a static relation allowlist, bounded result sizes, and a versioned migration ledger. Raw logs and secrets should not be stored; only the redacted excerpt and a fingerprint are persisted. If the database is unavailable, NodeHealer reports `knowledge.status = "unavailable"` and continues conservative local diagnosis without relaxing approval rules.
+
+The schema reference is `src/knowledge/schema.cozo`; the adapter currently applies schema version 1. Integration tests use a deterministic fake client. A real native CozoDB engine should also be exercised in the target deployment environment before relying on persistent storage in production.
 
 ## Development and CI
 
