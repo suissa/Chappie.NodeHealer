@@ -297,18 +297,87 @@ export class CozoKnowledgeStore {
   }
 }
 
+/**
+ * CozoDB standalone-server client. Uses the official POST /text-query contract,
+ * so production deployments do not require compiling the optional native binding.
+ */
+export class CozoHttpClient {
+  constructor({
+    endpoint = "http://127.0.0.1:9070/text-query",
+    authToken,
+    fetchImpl = globalThis.fetch,
+    timeoutMs = 5000
+  } = {}) {
+    const parsed = new URL(endpoint);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      throw new TypeError("CozoDB endpoint must use http or https.");
+    }
+    if (parsed.username || parsed.password) {
+      throw new TypeError("Do not embed credentials in the CozoDB endpoint URL.");
+    }
+    if (typeof fetchImpl !== "function") throw new TypeError("A Fetch-compatible implementation is required.");
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 1) throw new TypeError("timeoutMs must be a positive finite number.");
+    this.endpoint = parsed.toString();
+    this.authToken = authToken;
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+  }
+
+  async run(script, params = {}) {
+    if (typeof script !== "string" || !script.trim()) throw new TypeError("CozoScript must be a non-empty string.");
+    const headers = { "content-type": "application/json", accept: "application/json" };
+    if (this.authToken) headers["x-cozo-auth"] = this.authToken;
+    const response = await this.fetchImpl(this.endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ script, params }),
+      signal: AbortSignal.timeout(this.timeoutMs)
+    });
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (cause) {
+      const error = new Error("CozoDB HTTP endpoint returned invalid JSON.");
+      error.cause = cause;
+      throw error;
+    }
+    if (!response.ok) {
+      const error = new Error(payload?.display ?? payload?.message ?? `CozoDB HTTP request failed with status ${response.status}.`);
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  }
+
+  async close() {
+    // HTTP connections are owned by the runtime's fetch implementation.
+  }
+}
+
 export async function openCozoKnowledgeStore({
+  transport = "http",
+  endpoint = "http://127.0.0.1:9070/text-query",
+  authToken,
+  fetchImpl,
+  timeoutMs = 5000,
   engine = "rocksdb",
   path = "nodehealer.cozo",
   options = {},
   CozoDb
 } = {}) {
+  if (transport === "http") {
+    const db = new CozoHttpClient({ endpoint, authToken, fetchImpl, timeoutMs });
+    return new CozoKnowledgeStore({ db });
+  }
+  if (transport !== "embedded") {
+    throw new TypeError('transport must be "http" or "embedded".');
+  }
   let Constructor = CozoDb;
   if (!Constructor) {
     try {
       ({ CozoDb: Constructor } = await import("cozo-node"));
     } catch (cause) {
-      const error = new Error("CozoDB native binding is unavailable. Install cozo-node for the current platform or inject a CozoDb-compatible instance.");
+      const error = new Error("Embedded CozoDB requires a locally built cozo-node native binding. Use transport: \"http\" with the standalone CozoDB server, or inject CozoDb.");
       error.cause = cause;
       throw error;
     }
