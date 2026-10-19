@@ -242,18 +242,18 @@ export class CozoKnowledgeStore {
     return stored;
   }
 
-  async findSimilarCases({ signatureId, errorCode, tool = "node", limit = 20 } = {}) {
+  async findSimilarCases({ signatureId, errorCode, tool = "node", excludeCaseId, limit = 20 } = {}) {
     const boundedLimit = Math.max(1, Math.min(100, Math.floor(Number(limit) || 20)));
     if (signatureId) {
       return this.query(
-        `?[case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt] := *failure_case{case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt}, signature_id == $signature_id\n:order -observed_at\n:limit ${boundedLimit}`,
-        { signature_id: signatureId }
+        `?[case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt] := *failure_case{case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt}, signature_id == $signature_id, case_id != $exclude_case_id\n:order -observed_at\n:limit ${boundedLimit}`,
+        { signature_id: signatureId, exclude_case_id: excludeCaseId ?? "" }
       );
     }
     if (errorCode) {
       return this.query(
-        `?[case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt] := *failure_case{case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt}, error_code == $error_code, tool == $tool\n:order -observed_at\n:limit ${boundedLimit}`,
-        { error_code: errorCode, tool }
+        `?[case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt] := *failure_case{case_id, observed_at, tool, tool_version, runtime_version, error_code, signature_id, environment_fingerprint, redacted_excerpt}, error_code == $error_code, tool == $tool, case_id != $exclude_case_id\n:order -observed_at\n:limit ${boundedLimit}`,
+        { error_code: errorCode, tool, exclude_case_id: excludeCaseId ?? "" }
       );
     }
     return [];
