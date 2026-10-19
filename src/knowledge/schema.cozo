@@ -1,0 +1,139 @@
+# NodeHealer CozoDB schema
+# Apply each :create statement once through the versioned migration runner.
+# Keep raw logs and secrets out of this database.
+
+:create failure_case {
+    case_id: String
+ =>
+    observed_at: String,
+    source: String,
+    tool: String,
+    tool_version: String,
+    runtime_version: String,
+    platform: String,
+    error_code: String,
+    signature_id: String,
+    environment_fingerprint: String,
+    manifest_fingerprint: String,
+    lockfile_fingerprint: String,
+    redacted_excerpt: String,
+    raw_log_hash: String,
+    schema_version: Int
+}
+
+:create failure_signature {
+    signature_id: String
+ =>
+    family: String,
+    normalized_pattern: String,
+    parser_id: String,
+    parser_version: String,
+    specificity: Int,
+    active: Bool
+}
+
+:create evidence_fact {
+    fact_id: String
+ =>
+    case_id: String,
+    kind: String,
+    subject: String,
+    predicate: String,
+    object: String,
+    source_span: String,
+    extractor_id: String,
+    extractor_version: String,
+    confidence: Float,
+    polarity: String,
+    observed_at: String
+}
+
+:create hypothesis {
+    hypothesis_id: String
+ =>
+    case_id: String,
+    category: String,
+    cause: String,
+    confidence: Float,
+    status: String,
+    rule_version: String,
+    created_at: String
+}
+
+:create knowledge_edge {
+    from_id: String,
+    edge_type: String,
+    to_id: String
+ =>
+    confidence: Float,
+    provenance_id: String,
+    rule_version: String,
+    created_at: String
+}
+
+:create solution {
+    solution_id: String
+ =>
+    hypothesis_id: String,
+    title: String,
+    kind: String,
+    action_spec_json: String,
+    preconditions_json: String,
+    postconditions_json: String,
+    verification_json: String,
+    rollback_json: String,
+    risk_class: String,
+    requires_approval: Bool,
+    policy_version: String,
+    active: Bool,
+    created_at: String
+}
+
+:create solution_outcome {
+    outcome_id: String
+ =>
+    solution_id: String,
+    case_id: String,
+    result: String,
+    verified: Bool,
+    environment_fingerprint: String,
+    verification_ref: String,
+    revert_ref: String,
+    duration_ms: Int,
+    recorded_at: String
+}
+
+:create heuristic_rule {
+    rule_id: String
+ =>
+    version: String,
+    stage: String,
+    definition_json: String,
+    fixtures_ref: String,
+    precision: Float,
+    recall: Float,
+    enabled: Bool,
+    updated_at: String
+}
+
+:create execution_audit {
+    execution_id: String
+ =>
+    case_id: String,
+    solution_id: String,
+    command_fingerprint: String,
+    environment_fingerprint: String,
+    approval_ref: String,
+    status: String,
+    exit_code: Int,
+    verification_ref: String,
+    started_at: String,
+    ended_at: String
+}
+
+:create nodehealer_migration {
+    version: Int
+ =>
+    name: String,
+    applied_at: String
+}

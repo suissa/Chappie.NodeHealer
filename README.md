@@ -9,7 +9,7 @@ A generic Node.js error-diagnosis and repair-proposal engine. It normalizes fail
 - Commands are proposals, not shell execution. No command runs without a configured `apply` function and explicit approval.
 - Uncertain or potentially incompatible changes require approval. Verification is separate and must succeed before status becomes `healed`.
 - Research adapters receive minimized diagnostics. Treat logs and external search results as untrusted input.
-- SemVer inference intentionally supports only simple comparator ranges. Complex ranges are marked unknown and must be checked with the target project's actual SemVer implementation; the heuristic must not guess.
+- SemVer range evaluation delegates to the `semver` package and supports complete npm-style ranges. Invalid inputs remain unsupported rather than guessed.
 
 ## API
 
@@ -43,6 +43,46 @@ When this cause is detected, candidates are ordered by risk:
 2. Temporary workaround: `npm install --legacy-peer-deps`.
 
 The second command bypasses strict peer dependency resolution and may install an incompatible dependency tree. It is not a durable fix. The durable resolution is to select a verified compatible stable version or correct the upstream `peerDependencies` range if the package supports the intended prereleases. Review the project's manifest and lockfile before changing versions. Neither command is executed by the built-in heuristic. Callers can select a candidate with `heal(error, { candidateId })`; invalid candidate IDs are rejected without executing anything.
+
+## CozoDB knowledge store
+
+The CozoDB adapter persists redacted failure cases, extracted evidence, signatures, root-cause hypotheses, causal edges, solution candidates, verification outcomes, and execution audit metadata. It retrieves similar failures and computes bounded graph reachability inside CozoDB. Knowledge retrieval is context for diagnosis; it never grants permission to execute a candidate.
+
+The default transport uses CozoDB's standalone HTTP API at `POST /text-query`, so NodeHealer does not need a native module to be installed. Run a CozoDB server with a persistent storage engine for production; its HTTP endpoint should remain on a trusted local/private network or behind a secured proxy.
+
+Example using a running CozoDB server:
+
+```js
+import { NodeHealer } from "./src/index.mjs";
+import { openCozoKnowledgeStore } from "./src/knowledge/cozo-store.mjs";
+
+const knowledgeStore = await openCozoKnowledgeStore({
+  transport: "http",
+  endpoint: process.env.COZO_URL ?? "http://127.0.0.1:9070/text-query",
+  authToken: process.env.COZO_AUTH_TOKEN
+});
+await knowledgeStore.initialize();
+
+const healer = new NodeHealer({
+  knowledgeStore,
+  onTerminal: async (event) => {
+    // Render a concise summary and request explicit approval in your UI/terminal.
+    console.log(event.summary);
+    return "defer";
+  }
+});
+
+try {
+  const diagnosis = await healer.diagnose(errorText);
+  console.log(diagnosis.knowledge.status, diagnosis.knowledge.similarCases.length);
+} finally {
+  await knowledgeStore.close();
+}
+```
+
+You can also inject an existing Cozo-compatible object ({ `run(query, params)` }) for tests or a managed database, or set `transport: "embedded"` and provide a locally built `cozo-node` binding. The HTTP client uses the documented `x-cozo-auth` header when `authToken` is supplied. The adapter uses bound parameters for values, a static relation allowlist, bounded result sizes, and a versioned migration ledger. Raw logs and secrets should not be stored; only the redacted excerpt and a fingerprint are persisted. If the database is unavailable, NodeHealer reports `knowledge.status = "unavailable"` and continues conservative local diagnosis without relaxing approval rules.
+
+The schema reference is `src/knowledge/schema.cozo`; the adapter currently applies schema version 1. Tests cover the HTTP contract with a fake fetch implementation. Set `COZO_URL` to a trusted `/text-query` endpoint to enable the live server integration test in `test/cozo-http-client.test.mjs`. The live test is skipped when no endpoint is configured.
 
 ## Development and CI
 

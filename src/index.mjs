@@ -108,7 +108,7 @@ export function proposeRepairs(error) {
     const packageName = evidence.peerDependency?.name;
     const safePackageName = typeof packageName === "string" && /^(?:@[a-z0-9._~-]+\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(packageName) ? packageName : null;
     const declaringName = evidence.peerDependency?.declaredBy?.name;
-    const safeDeclaringName = typeof declaringName === "string" && /^(?:@[a-z0-9._~-]+\\/[a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(declaringName) ? declaringName : null;
+    const safeDeclaringName = typeof declaringName === "string" && /^(?:@[a-z0-9._~-]+[/][a-z0-9._~-]+|[a-z0-9._~-]+)$/i.test(declaringName) ? declaringName : null;
     const inspectCommand = safePackageName ? "npm view " + safePackageName + " versions --json" : "npm ls";
     const verifyCommand = safePackageName && safeDeclaringName
       ? "npm ls " + safePackageName + " " + safeDeclaringName
@@ -160,18 +160,103 @@ export function proposeRepairs(error) {
 }
 
 export class NodeHealer {
-  constructor({ search = async () => [], apply = async () => { throw new Error("No repair executor configured"); }, verify = async () => false, onTerminal = async () => "defer" } = {}) {
+  constructor({ search = async () => [], apply = async () => { throw new Error("No repair executor configured"); }, verify = async () => false, onTerminal = async () => "defer", knowledgeStore = null } = {}) {
     this.search = search;
     this.apply = apply;
     this.verify = verify;
     this.onTerminal = onTerminal;
+    this.knowledgeStore = knowledgeStore;
+  }
+
+  async persistAndRetrieveKnowledge(error) {
+    if (!this.knowledgeStore) return { status: "disabled", similarCases: [], reachableNodes: [] };
+    try {
+      await this.knowledgeStore.initialize();
+      const now = new Date().toISOString();
+      const signatureId = `${error.code ?? "UNKNOWN"}:${error.category}`;
+      await this.knowledgeStore.put("failure_signature", {
+        signature_id: signatureId,
+        family: error.category,
+        normalized_pattern: error.summary,
+        parser_id: "nodehealer-core",
+        parser_version: "1",
+        specificity: error.code ? 80 : 20,
+        active: true
+      });
+      const facts = [];
+      const dependency = error.dependencyEvidence ?? {};
+      if (dependency.resolvingPackage) facts.push({
+        fact_id: `${error.id}:resolving-package`, kind: "package",
+        subject: "resolvingPackage", predicate: "is", object: JSON.stringify(dependency.resolvingPackage),
+        extractor_id: "npm-eresolve", extractor_version: "1", confidence: 0.99, polarity: "positive", source_span: ""
+      });
+      if (dependency.found) facts.push({
+        fact_id: `${error.id}:found-package`, kind: "package",
+        subject: "found", predicate: "is", object: JSON.stringify(dependency.found),
+        extractor_id: "npm-eresolve", extractor_version: "1", confidence: 0.99, polarity: "positive", source_span: ""
+      });
+      if (dependency.peerDependency) facts.push({
+        fact_id: `${error.id}:peer-dependency`, kind: "constraint",
+        subject: dependency.peerDependency.name, predicate: "peer-range",
+        object: JSON.stringify(dependency.peerDependency),
+        extractor_id: "npm-eresolve", extractor_version: "1", confidence: 0.98, polarity: "positive", source_span: ""
+      });
+      const hypothesisId = `${error.id}:root-cause`;
+      await this.knowledgeStore.recordFailure({
+        case_id: error.id,
+        observed_at: now,
+        source: "nodehealer",
+        tool: "npm",
+        tool_version: "",
+        runtime_version: process.version,
+        platform: process.platform,
+        error_code: error.code ?? "",
+        signature_id: signatureId,
+        environment_fingerprint: createHash("sha256").update(`${process.version}:${process.platform}`).digest("hex"),
+        manifest_fingerprint: "",
+        lockfile_fingerprint: "",
+        redacted_excerpt: error.sanitizedEvidence,
+        raw_log_hash: error.fingerprint,
+        schema_version: 1,
+        evidenceFacts: facts,
+        hypotheses: [{
+          hypothesis_id: hypothesisId,
+          category: error.category,
+          cause: error.summary,
+          confidence: error.code ? 0.8 : 0.3,
+          status: "proposed",
+          rule_version: "nodehealer-core-v1",
+          created_at: now
+        }]
+      });
+      await this.knowledgeStore.put("knowledge_edge", {
+        from_id: error.id, edge_type: "suggests", to_id: hypothesisId,
+        confidence: error.code ? 0.8 : 0.3, provenance_id: error.id,
+        rule_version: "nodehealer-core-v1", created_at: now
+      });
+      const [similarCases, reachableNodes] = await Promise.all([
+        this.knowledgeStore.findSimilarCases({ signatureId, errorCode: error.code, tool: "npm", excludeCaseId: error.id, limit: 20 }),
+        this.knowledgeStore.inferReachableNodes(error.id, { maxDepth: 4, limit: 100 })
+      ]);
+      return { status: "available", signatureId, hypothesisId, similarCases, reachableNodes };
+    } catch (cause) {
+      // Knowledge outages must not silently change safety policy or block local diagnosis.
+      return { status: "unavailable", reason: cause?.message ?? "knowledge-store-error", similarCases: [], reachableNodes: [] };
+    }
   }
 
   async diagnose(input) {
     const error = normalizeError(input);
     const local = proposeRepairs(error);
-    const researched = await this.search({ code: error.code, category: error.category, summary: error.summary, packages: error.packages, dependencyEvidence: error.dependencyEvidence });
-    return { error: { id: error.id, code: error.code, category: error.category, summary: error.summary, fingerprint: error.fingerprint, dependencyEvidence: error.dependencyEvidence }, candidates: [...local, ...researched] };
+    const [researched, knowledge] = await Promise.all([
+      this.search({ code: error.code, category: error.category, summary: error.summary, packages: error.packages, dependencyEvidence: error.dependencyEvidence }),
+      this.persistAndRetrieveKnowledge(error)
+    ]);
+    return {
+      error: { id: error.id, code: error.code, category: error.category, summary: error.summary, fingerprint: error.fingerprint, dependencyEvidence: error.dependencyEvidence },
+      candidates: [...local, ...researched],
+      knowledge
+    };
   }
 
   async heal(input, { autoApply = false, candidateId } = {}) {
